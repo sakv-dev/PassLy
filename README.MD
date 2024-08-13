@@ -1,5 +1,3 @@
-Certainly! Here is the translation of your README into English:
-
 # PassLy - Password Manager
 
 ## Description
