@@ -7,6 +7,7 @@ import cryptography.fernet as cf
 import stdiomask
 from datetime import datetime
 import pyfiglet
+import hashlib
 
 # Couleurs ANSI
 class Colors:
@@ -21,14 +22,32 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 def generate_master_password():
-    try:
-        key = cf.Fernet.generate_key()
-        with open('master.key', 'wb') as master_password_writer:
-            master_password_writer.write(key)
-    except Exception as e:
-        print(f"{Colors.FAIL}Error generating master password: {e}{Colors.ENDC}")
+    master_password = stdiomask.getpass(prompt=f"{Colors.OKGREEN}Please create a master password > {Colors.ENDC}", mask='*')
+    confirm_password = stdiomask.getpass(prompt=f"{Colors.OKGREEN}Please confirm your master password > {Colors.ENDC}", mask='*')
+    
+    if master_password != confirm_password:
+        print(f"{Colors.FAIL}Passwords do not match! Exiting.{Colors.ENDC}")
         sys.exit()
+    
+    hashed_password = hashlib.sha256(master_password.encode()).hexdigest()
+    with open('master_password.key', 'w') as master_password_writer:
+        master_password_writer.write(hashed_password)
+    
+    key = cf.Fernet.generate_key()
+    with open('master.key', 'wb') as master_key_writer:
+        master_key_writer.write(key)
+    
+    print(f"{Colors.OKGREEN}Master password created successfully!{Colors.ENDC}")
 
+def verify_master_password():
+    stored_hashed_password = open('master_password.key', 'r').read()
+    entered_password = stdiomask.getpass(prompt=f"{Colors.OKGREEN}Please enter the master password > {Colors.ENDC}", mask='*')
+    entered_hashed_password = hashlib.sha256(entered_password.encode()).hexdigest()
+    
+    if entered_hashed_password != stored_hashed_password:
+        print(f"{Colors.FAIL}Incorrect master password! Exiting.{Colors.ENDC}")
+        sys.exit()
+    
 def load_master_password():
     try:
         return open('./master.key', 'rb').read()
@@ -53,7 +72,6 @@ def encrypt_data(data):
             return f.encrypt(data.encode())
         else:
             decrypted_data = f.decrypt(encrypted_data).decode()
-            # Ajout de la nouvelle entrée correctement formatée
             new_data = decrypted_data.strip() + "\n---\n" + data.strip()
             return f.encrypt(new_data.encode())
     except Exception as e:
@@ -110,23 +128,19 @@ def search_password_by_name(name_to_search):
         with open('vault.txt', 'rb') as passwords_reader:
             encrypted_data = passwords_reader.read()
         decrypted_data = decrypt_data(encrypted_data).decode()
-
-        # Split the decrypted data into individual entries
-        entries = decrypted_data.split("\n---\n")  # Using the separator to split records
+        entries = decrypted_data.split("\n---\n")
         found_entries = []
 
-        # Normalize the name_to_search by stripping spaces and converting to lowercase
         normalized_name_to_search = name_to_search.strip().lower()
 
         for entry in entries:
             lines = entry.split("\n")
             for line in lines:
                 if line.startswith("Name: "):
-                    # Normalize the name in the entry for comparison
                     entry_name = line[6:].strip().lower()
                     if entry_name == normalized_name_to_search:
                         found_entries.append(entry)
-                        break  # Stop searching once the correct entry is found
+                        break
 
         if found_entries:
             print("\n---\n".join(found_entries))
@@ -151,6 +165,12 @@ print(logo)
 print(f'{Colors.FAIL}Created by Stalka https://github.com/sakv-dev')
 print(f"{Colors.BOLD}{Colors.OKGREEN}Welcome to your password manager!{Colors.ENDC}")
 print()
+
+if os.path.exists('./master_password.key'):
+    verify_master_password()
+else:
+    print(f"{Colors.WARNING}No master password found. Let's create one.{Colors.ENDC}")
+    generate_master_password()
 
 while True:
     if os.path.exists('./vault.txt') and os.path.exists('./master.key'):
